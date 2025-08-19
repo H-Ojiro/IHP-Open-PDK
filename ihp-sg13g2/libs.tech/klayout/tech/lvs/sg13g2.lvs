@@ -117,6 +117,10 @@ NET_ONLY = bool_check?($net_only)
 
 logger.info("Selected NET_ONLY option: #{NET_ONLY}")
 
+SKIP_EXTRACT = bool_check?($skip_extract)
+
+logger.info("Selected SKIP_EXTRACT option: #{SKIP_EXTRACT}")
+
 # TOP_LVL_PINS
 TOP_LVL_PINS = bool_check?($top_lvl_pins)
 
@@ -208,16 +212,22 @@ custom_spice_writer.with_comments = SPICE_WITH_COMMENTS
 
 if $target_netlist
   logger.info("LVS extracted netlist at: #{$target_netlist}")
-  target_netlist($target_netlist, custom_spice_writer,
-                 "Extracted by KLayout with SG13G2 LVS runset on : #{Time.now.strftime('%d/%m/%Y %H:%M')}")
+  netlist_path = $target_netlist
+  if ! SKIP_EXTRACT
+    target_netlist($target_netlist, custom_spice_writer,
+                   "Extracted by KLayout with SG13G2 LVS runset on : #{Time.now.strftime('%d/%m/%Y %H:%M')}")
+  end
 else
   layout_dir = Pathname.new(RBA::CellView.active.filename).parent.realpath
   netlist_path = layout_dir.join("#{source.cell_name}_extracted.cir")
-  target_netlist(netlist_path.to_s, custom_spice_writer,
-                 "Extracted by KLayout with SG13G2 LVS runset on : #{Time.now.strftime('%d/%m/%Y %H:%M')}")
+  if ! SKIP_EXTRACT
+    target_netlist(netlist_path.to_s, custom_spice_writer,
+                   "Extracted by KLayout with SG13G2 LVS runset on : #{Time.now.strftime('%d/%m/%Y %H:%M')}")
+  end
   logger.info("SG13G2 Klayout LVS extracted netlist file at: #{source.cell_name}_extracted.cir")
 end
 
+if ! SKIP_EXTRACT
 #================================================
 #------------- LAYERS DEFINITIONS ---------------
 #================================================
@@ -362,6 +372,10 @@ logger.info('Starting SG13G2 LVS DEVICES EXTRACTION')
 
 # %include rule_decks/tap_extraction.lvs
 
+else
+  logger.info('Skipped extraction')
+end
+
 #==================================================
 # ------------ COMPARISON PREPARATIONS ------------
 #==================================================
@@ -371,6 +385,16 @@ logger.info('Starting SG13G2 LVS Options Preparations')
 # === Extract Netlist Only ===
 netlist if NET_ONLY
 return if NET_ONLY
+
+if SKIP_EXTRACT
+  if File.exist?(netlist_path)
+    logger.info("Using existing extracted file #{netlist_path}")
+  else
+    logger.error("Cannot find extracted file #{netlist_path} => Stop procedure")
+    return 1
+  end
+  netlist.read(netlist_path, reader)
+end
 
 # === Aligns the extracted netlist vs. the schematic ===
 logger.info('Starting SG13G2 LVS Alignment')
